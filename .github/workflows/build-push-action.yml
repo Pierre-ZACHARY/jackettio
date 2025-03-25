@@ -34,8 +34,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/telkaoss/stream-fusion:latest
-            ghcr.io/telkaoss/stream-fusion:${{ github.event.release.tag_name }}
+            ghcr.io/telkaoss/jackettio:latest
+            ghcr.io/telkaoss/jackettio:${{ github.event.release.tag_name }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Docker image for Jackettio
