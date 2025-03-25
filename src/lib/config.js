@@ -56,17 +56,20 @@ export default {
     forceCacheNextEpisode: (process.env.DEFAULT_FORCE_CACHE_NEXT_EPISODE || 'false') === 'true',
     sortCached: sortCommaListToArray(process.env.DEFAULT_SORT_CACHED || 'quality:true, size:true'),
     sortUncached: sortCommaListToArray(process.env.DEFAULT_SORT_UNCACHED || 'seeders:true'),
-    hideUncached:  (process.env.DEFAULT_HIDE_UNCACHED || 'false') === 'true',
+    hideUncached: (process.env.DEFAULT_HIDE_UNCACHED || 'false') === 'true',
     indexers: commaListToArray(process.env.DEFAULT_INDEXERS || 'all'),
-    indexerTimeoutSec: parseInt(process.env.DEFAULT_INDEXER_TIMEOUT_SEC || '60'),
+    indexerTimeoutSec: parseInt(process.env.DEFAULT_INDEXER_TIMEOUT_SEC || 60),
     passkey: '',
     // If not defined, the original title is used for search. If defined, the title in the given language is used for search
     // format: ISO 639-1, example: en
     metaLanguage: process.env.DEFAULT_META_LANGUAGE || '',
-    enableMediaFlow: (process.env.DEFAULT_ENABLE_MEDIA_FLOW || 'false') === 'true',
-    mediaflowProxyUrl: process.env.DEFAULT_MEDIA_FLOW_PROXY_URL || '',
-    mediaflowApiPassword: process.env.DEFAULT_MEDIA_FLOW_API_PASSWORD || '',
-    mediaflowPublicIp: process.env.DEFAULT_MEDIA_FLOW_PUBLIC_IP || ''
+    enableMediaFlow: (process.env.DEFAULT_ENABLE_MEDIAFLOW || 'false') === 'true',
+    mediaflowProxyUrl: process.env.DEFAULT_MEDIAFLOW_PROXY_URL || '',
+    mediaflowApiPassword: process.env.DEFAULT_MEDIAFLOW_API_PASSWORD || '',
+    mediaflowPublicIp: process.env.DEFAULT_MEDIAFLOW_PUBLIC_IP || '',
+    useStremThru: (process.env.DEFAULT_USE_STREMTHRU || 'true') === 'true',
+    stremthruUrl: process.env.STREMTHRU_URL || 'https://stremthru.13377001.xyz',
+    debridId: process.env.DEFAULT_DEBRID_ID || 'realdebrid'
   },
 
   qualities: [
