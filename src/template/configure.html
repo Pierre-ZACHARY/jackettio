@@ -119,6 +119,25 @@
               </label>
             </div>
           </div>
+          
+          <!-- StremThru Configuration -->
+          <div class="mb-3 border-bottom pb-3">
+            <div class="mb-3 d-flex flex-row">
+              <div class="form-check form-switch">
+                <input class="form-check-input me-1" type="checkbox" v-model="form.useStremThru" id="useStremThru">
+                <label for="useStremThru" class="d-flex flex-column">
+                  <span>Use StremThru as a unified service (Recommended)</span>
+                  <small class="text-muted">Allows checking if files are cached and using any debrid service via StremThru.</small>
+                </label>
+              </div>
+            </div>
+            <div v-if="form.useStremThru" class="mb-3">
+              <label for="stremthruUrl">StremThru URL:</label>
+              <input type="text" v-model="form.stremthruUrl" class="form-control" id="stremthruUrl" placeholder="http://localhost:8080">
+              <small class="text-muted">The URL of your StremThru instance (for example: http://localhost:8080)</small>
+            </div>
+          </div>
+          
           <div class="mb-3">
             <label>Debrid provider:</label>
             <select v-model="debrid" class="form-select" @change="form.debridId = debrid.id">
@@ -231,7 +250,9 @@
             enableMediaFlow: defaultUserConfig.enableMediaFlow,
             mediaflowProxyUrl: defaultUserConfig.mediaflowProxyUrl,
             mediaflowApiPassword: defaultUserConfig.mediaflowApiPassword,
-            mediaflowPublicIp: defaultUserConfig.mediaflowPublicIp
+            mediaflowPublicIp: defaultUserConfig.mediaflowPublicIp,
+            useStremThru: defaultUserConfig.useStremThru || false,
+            stremthruUrl: defaultUserConfig.stremthruUrl || ''
           });
 
           qualities.forEach(quality => quality.checked = defaultUserConfig.qualities.includes(quality.value));
