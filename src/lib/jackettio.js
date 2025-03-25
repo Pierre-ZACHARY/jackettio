@@ -163,7 +163,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
           // Season x
           wordsStr.includes(`season ${season}`)
           // SXX
-          || words.includes(`s${numberPad(season)}`)
+          || words.includes(`s${numberPad(season, 2)}`)
         ){
           return true;
         }
@@ -225,10 +225,44 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
       try {
 
         const isValidCachedFiles = type == 'series' ? files => !!searchEpisodeFile(files, season, episode) : files => true;
-        const cachedTorrents = (await debridInstance.getTorrentsCached(torrents, isValidCachedFiles)).map(torrent => {
-          torrent.isCached = true;
-          return torrent;
-        });
+        
+        // Obtenir les torrents en cache et leurs statuts
+        let statusTorrents = [];
+        let cachedTorrents = [];
+        
+        if (debridInstance.constructor.id === 'stremthru') {
+          // For StremThru, retrieve status of all torrents
+          // We store the status for all torrents, but only keep
+          // the torrents in cache in cachedTorrents to not disturb existing behavior
+          
+          // Save statuses
+          const origStatuses = {};
+          for (const torrent of torrents) {
+            if (torrent.status) {
+              origStatuses[torrent.infos.infoHash] = torrent.status;
+            }
+          }
+          
+          // Obtain cached torrents and their status
+          cachedTorrents = (await debridInstance.getTorrentsCached(torrents, isValidCachedFiles)).map(torrent => {
+            torrent.isCached = true;
+            return torrent;
+          });
+          
+          // Restore statuses for all torrents
+          for (const torrent of torrents) {
+            if (origStatuses[torrent.infos.infoHash]) {
+              torrent.status = origStatuses[torrent.infos.infoHash];
+            }
+          }
+        } else {
+          // For other services, normal behavior
+          cachedTorrents = (await debridInstance.getTorrentsCached(torrents, isValidCachedFiles)).map(torrent => {
+            torrent.isCached = true;
+            return torrent;
+          });
+        }
+        
         const uncachedTorrents = torrents.filter(torrent => cachedTorrents.indexOf(torrent) === -1);
 
         if(config.replacePasskey && !(userConfig.passkey && userConfig.passkey.match(new RegExp(config.replacePasskeyPattern)))){
@@ -357,14 +391,48 @@ function getFile(files, type, season, episode){
 export async function getStreams(userConfig, type, stremioId, publicUrl){
 
   userConfig = await mergeDefaultUserConfig(userConfig);
-  const {id, season, episode} = parseStremioId(stremioId);
   const debridInstance = debrid.instance(userConfig);
+  const {id, season, episode} = parseStremioId(stremioId);
 
   let metaInfos = await getMetaInfos(type, stremioId, userConfig.metaLanguage);
 
   const torrents = await getTorrents(userConfig, metaInfos, debridInstance);
+  
+  // Retrieve the torrents already clicked from localStorage
+  const clickedHashes = [];
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem('jackettio_clicked_torrents');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        Object.assign(clickedHashes, parsed);
+      }
+    } catch (err) {
+      console.error('Error when retrieving clicked torrents:', err);
+    }
+  }
+  
+  // Mark torrents as clicked if present in localStorage
+  torrents.forEach(torrent => {
+    if (torrent.infos && torrent.infos.infoHash && clickedHashes.includes(torrent.infos.infoHash)) {
+      torrent.clicked = true;
+    }
+  });
+  
+  // Initialize torrent statuses if it's StremThru
+  // This is much more efficient because it's a single request for all torrents
+  if (debridInstance && debridInstance.constructor.id === 'stremthru' && debridInstance.initTorrentStatuses) {
+    try {
+      await debridInstance.initTorrentStatuses(torrents);
+      console.log(`${stremioId} : Torrent statuses initialized`);
+    } catch (err) {
+      console.error(`Error when initializing statuses: ${err.message}`);
+    }
+  }
+  
+  if (!torrents.length) return [];
 
-  // Prepare next expisode torrents list
+  // Prepare next episode torrents list
   if(type == 'series'){
     prepareNextEpisode({...userConfig, forceCacheNextEpisode: false}, metaInfos, debridInstance);
   }
@@ -379,8 +447,24 @@ export async function getStreams(userConfig, type, stremioId, publicUrl){
     if(torrent.progress && !torrent.isCached){
       rows.push(`⬇️ ${torrent.progress.percent}% ${bytesToSize(torrent.progress.speed)}/s`);
     }
+    
+    // Use the appropriate status icon if available, otherwise default behavior
+    let statusIcon = '';
+    if (debridInstance.constructor.id === 'stremthru') {
+      if (torrent.isCached) {
+        // For cached torrents, use the yellow lightning bolt
+        statusIcon = '⚡';
+      } else {
+        // For all others, use the blue square with a downward arrow
+        statusIcon = '⬇️';
+      }
+    } else if (torrent.isCached) {
+      // Default behavior for cached torrents from other services
+      statusIcon = '+';
+    }
+    
     return {
-      name: `[${debridInstance.shortName}${torrent.isCached ? '+' : ''}] ${userConfig.enableMediaFlow ? '🕵🏼‍♂️ ' : ''}${config.addonName} ${quality}`,
+      name: `[${debridInstance.shortName}${statusIcon}] ${userConfig.enableMediaFlow ? '🕵🏼‍♂️ ' : ''}${config.addonName} ${quality}`,
       title: rows.join("\n"),
       url: torrent.disabled ? '#' : `${publicUrl}/${btoa(JSON.stringify(userConfig))}/download/${type}/${stremioId}/${torrent.id}/${file.name || torrent.name}`
     };
@@ -399,6 +483,33 @@ export async function getDownload(userConfig, type, stremioId, torrentId){
   let download;
   let waitMs = 0;
 
+  // Record this torrent as "clicked" in localStorage
+  if (infos && infos.infoHash && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      let clickedHashes = [];
+      const stored = window.localStorage.getItem('jackettio_clicked_torrents');
+      if (stored) {
+        clickedHashes = JSON.parse(stored);
+      }
+      
+      // Add the hash if it's not already present
+      if (!clickedHashes.includes(infos.infoHash)) {
+        clickedHashes.push(infos.infoHash);
+        window.localStorage.setItem('jackettio_clicked_torrents', JSON.stringify(clickedHashes));
+        console.log(`${stremioId} : Torrent ${infos.infoHash} marked as clicked`);
+      }
+    } catch (err) {
+      console.error('Error when recording clicked torrent:', err);
+    }
+  }
+
+  // Immediately update status to "queued" so that the hourglass is displayed
+  // even if the rest fails due to API errors
+  if (debridInstance && debridInstance.constructor.id === 'stremthru' && debridInstance.constructor.setStatus && infos && infos.infoHash) {
+    debridInstance.constructor.setStatus(infos.infoHash, 'queued');
+    console.log(`${stremioId} : Status updated to 'queued' for ${infos.infoHash}`);
+  }
+
   while(actionInProgress.getDownload[cacheKey]){
     await wait(Math.min(300, waitMs+=50));
   }
@@ -406,7 +517,7 @@ export async function getDownload(userConfig, type, stremioId, torrentId){
 
   try {
 
-    // Prepare next expisode debrid cache
+    // Prepare next episode debrid cache
     if(type == 'series' && userConfig.forceCacheNextEpisode){
       getMetaInfos(type, stremioId, userConfig.metaLanguage).then(metaInfos => prepareNextEpisode(userConfig, metaInfos, debridInstance));
     }
@@ -415,9 +526,10 @@ export async function getDownload(userConfig, type, stremioId, torrentId){
     if(download)return download;
 
     console.log(`${stremioId} : ${debridInstance.shortName} : ${infos.infoHash} : get files ...`);
+    
+    // We have already updated the status at the beginning of the function
     files = await getDebridFiles(userConfig, infos, debridInstance);
     console.log(`${stremioId} : ${debridInstance.shortName} : ${infos.infoHash} : ${files.length} files found`);
-
 
     download = await debridInstance.getDownload(getFile(files, type, season, episode));
 
@@ -427,7 +539,11 @@ export async function getDownload(userConfig, type, stremioId, torrentId){
       return download;
     }
 
-    throw new Error(`No download for type ${type} and ID ${torrentId}`);
+    // If no download is available, redirect to the not_ready.mp4 video
+    console.log(`${stremioId} : No download available, redirect to not_ready.mp4`);
+    return {
+      url: `${publicUrl}/static/videos/not_ready.mp4`
+    };
 
   }finally{
 
