@@ -174,13 +174,24 @@ app.use('/:userConfig/download/:type/:id/:torrentId/:name?', async(req, res, nex
 
   try {
 
-    const url = await jackettio.getDownload(
+    const result = await jackettio.getDownload(
       Object.assign(JSON.parse(atob(req.params.userConfig)), {ip: req.clientIp}),
       req.params.type, 
       req.params.id, 
       req.params.torrentId
     );
 
+    // Vérifier si le résultat indique que le fichier n'est pas prêt
+    if (result.notReady) {
+      console.log(`${req.params.id} : File not ready: ${result.reason || 'Unknown reason'}`);
+      res.status(302);
+      res.set('location', `/videos/not_ready.mp4`);
+      res.send('');
+      return;
+    }
+
+    // Si nous avons une URL directe, l'utiliser
+    const url = typeof result === 'string' ? result : result.url;
     const parsed = new URL(url);
     const cut = (value) => value ?  `${value.substr(0, 5)}******${value.substr(-5)}` : '';
     console.log(`${req.params.id} : Redirect: ${parsed.protocol}//${parsed.host}${cut(parsed.pathname)}${cut(parsed.search)}`);
