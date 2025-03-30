@@ -165,53 +165,126 @@ export default class StremThru {
       });
       
       if (!addRes || !addRes.data || !addRes.data.id) {
-        throw new Error('Failed to add magnet');
+        console.error('Failed to add magnet');
+        return { files: [], errorType: 'not_ready' }; // Retourner un objet avec le type d'erreur
       }
       
       const magnetId = addRes.data.id;
       
-      // Wait for the magnet to be processed
-      let magnetInfo;
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      while (attempts < maxAttempts) {
-        magnetInfo = await this.#request('GET', `/magnets/${magnetId}`);
+      // Vérifier immédiatement le statut du magnet
+      try {
+        const magnetInfo = await this.#request('GET', `/magnets/${magnetId}`);
         
-        if (magnetInfo && magnetInfo.data) {
-          if (magnetInfo.data.status === 'downloaded' || magnetInfo.data.status === 'cached') {
-            break;
-          }
+        if (!magnetInfo || !magnetInfo.data) {
+          console.error('Failed to get magnet info');
+          return { files: [], errorType: 'not_ready' };
         }
         
-        await wait(2000);
-        attempts++;
+        // Si le statut est "queued" ou autre chose que "downloaded" ou "cached",
+        // renvoyer immédiatement un tableau vide
+        if (magnetInfo.data.status !== 'downloaded' && magnetInfo.data.status !== 'cached') {
+          console.log(`Magnet not ready, status: ${magnetInfo.data.status}`);
+          return { files: [], errorType: 'not_ready' };
+        }
+        
+        // Si nous arrivons ici, le magnet est prêt (downloaded ou cached)
+        if (magnetInfo.data.files && magnetInfo.data.files.length > 0) {
+          return {
+            files: magnetInfo.data.files.map(file => {
+              return {
+                name: file.name.split('/').pop(),
+                size: file.size,
+                id: `${magnetId}:${file.index}`,
+                url: '',
+                ready: true,
+                status: magnetInfo.data.status
+              };
+            })
+          };
+        } else {
+          console.error('No files found in magnet');
+          return { files: [], errorType: 'not_ready' };
+        }
+      } catch (err) {
+        console.error(`Error checking magnet status: ${err.message}`);
+        // Utiliser analyzeError pour déterminer le type d'erreur
+        const errorType = this.constructor.analyzeError(err);
+        return { files: [], errorType };
       }
-      
-      if (!magnetInfo || !magnetInfo.data || !magnetInfo.data.files || magnetInfo.data.files.length === 0) {
-        throw new Error('No files found or magnet processing timeout');
-      }
-      
-      return magnetInfo.data.files.map(file => {
-        return {
-          name: file.name.split('/').pop(),
-          size: file.size,
-          id: `${magnetId}:${file.index}`,
-          url: '',
-          ready: magnetInfo.data.status === 'downloaded' || magnetInfo.data.status === 'cached',
-          status: magnetInfo.data.status // Add the status for the icon
-        };
-      });
     } catch (err) {
       console.error(`Error getting files from magnet: ${err.message}`);
-      throw err;
+      // Utiliser analyzeError pour déterminer le type d'erreur
+      const errorType = this.constructor.analyzeError(err);
+      return { files: [], errorType };
     }
   }
 
   async getFilesFromBuffer(buffer, infoHash) {
-    // StremThru does not directly support uploading torrent files
-    // Use the hash instead
-    return this.getFilesFromHash(infoHash);
+    try {
+      // Convertir le buffer en lien magnet
+      const parseTorrent = (await import('parse-torrent')).default;
+      const toMagnetURI = (await import('parse-torrent')).toMagnetURI;
+      
+      const parsedTorrent = await parseTorrent(new Uint8Array(buffer));
+      const magnet = toMagnetURI(parsedTorrent);
+      
+      console.log(`Converted torrent buffer to magnet: ${magnet}`);
+      
+      return this.getFilesFromMagnet(magnet, infoHash);
+    } catch (err) {
+      console.error(`Error converting torrent buffer to magnet: ${err.message}`);
+      
+      // Fallback to infoHash if available
+      if (infoHash) {
+        return this.getFilesFromHash(infoHash);
+      } else {
+        throw new Error('Cannot convert torrent buffer to magnet and no infoHash available');
+      }
+    }
+  }
+
+  async getFilesFromTorrent(torrentInfos) {
+    // S'assurer que nous avons un lien magnet
+    let magnet = torrentInfos.magnetUrl;
+    
+    // Si nous n'avons pas de lien magnet mais que nous avons un fichier torrent, le convertir
+    if (!magnet && torrentInfos.torrentLocation) {
+      try {
+        const torrentInfosModule = await import('../torrentInfos.js');
+        const torrentBuffer = await torrentInfosModule.getTorrentFile(torrentInfos);
+        const parseTorrent = (await import('parse-torrent')).default;
+        const toMagnetURI = (await import('parse-torrent')).toMagnetURI;
+        
+        const parsedTorrent = await parseTorrent(new Uint8Array(torrentBuffer));
+        magnet = toMagnetURI(parsedTorrent);
+        
+        // Mettre à jour les infos du torrent avec le lien magnet généré
+        torrentInfos.magnetUrl = magnet;
+        
+        console.log(`Converted torrent file to magnet: ${magnet}`);
+      } catch (err) {
+        console.error(`Error converting torrent to magnet: ${err.message}`);
+        // Utiliser analyzeError pour déterminer le type d'erreur
+        const errorType = this.constructor.analyzeError(err);
+        
+        // Fallback to infoHash if available
+        if (torrentInfos.infoHash) {
+          magnet = `magnet:?xt=urn:btih:${torrentInfos.infoHash}`;
+        } else {
+          return { files: [], errorType };
+        }
+      }
+    } else if (!magnet && torrentInfos.infoHash) {
+      // Si nous n'avons pas de lien magnet mais que nous avons un infoHash, créer un lien magnet basique
+      magnet = `magnet:?xt=urn:btih:${torrentInfos.infoHash}`;
+    }
+    
+    if (!magnet) {
+      return { files: [], errorType: 'not_ready' };
+    }
+    
+    const result = await this.getFilesFromMagnet(magnet, torrentInfos.infoHash);
+    return result;
   }
 
   async getDownload(file) {
@@ -222,18 +295,21 @@ export default class StremThru {
       const magnetInfo = await this.#request('GET', `/magnets/${magnetId}`);
       
       if (!magnetInfo || !magnetInfo.data) {
-        throw new Error('Failed to get magnet info');
+        console.error('Failed to get magnet info');
+        return { notReady: true, errorType: 'not_ready', reason: 'Failed to get magnet info' };
       }
       
       if (magnetInfo.data.status !== 'downloaded' && magnetInfo.data.status !== 'cached') {
-        throw new Error(ERROR.NOT_READY);
+        console.log(`File not ready, status: ${magnetInfo.data.status}`);
+        return { notReady: true, errorType: 'not_ready', reason: `File not ready, status: ${magnetInfo.data.status}` };
       }
       
       // Find the corresponding file
       const targetFile = magnetInfo.data.files.find(f => f.index.toString() === fileIndex);
       
       if (!targetFile || !targetFile.link) {
-        throw new Error('File not found or link not available');
+        console.error('File not found or link not available');
+        return { notReady: true, errorType: 'not_ready', reason: 'File not found or link not available' };
       }
       
       // Generate the download link
@@ -242,13 +318,16 @@ export default class StremThru {
       });
       
       if (!linkRes || !linkRes.data || !linkRes.data.link) {
-        throw new Error('Failed to generate download link');
+        console.error('Failed to generate download link');
+        return { notReady: true, errorType: 'not_ready', reason: 'Failed to generate download link' };
       }
       
       return linkRes.data.link;
     } catch (err) {
       console.error(`Error getting download link: ${err.message}`);
-      throw err;
+      // Utiliser analyzeError pour déterminer le type d'erreur
+      const errorType = this.constructor.analyzeError(err);
+      return { notReady: true, errorType, reason: err.message };
     }
   }
 
@@ -473,5 +552,82 @@ export default class StremThru {
    */
   static getStatus(hash) {
     return hash ? StatusCache.get(hash) : null;
+  }
+
+  /**
+   * Analyze an error from StremThru API and determine which error video to show
+   * @param {Error} error - The error object
+   * @returns {string} - The error type to use for selecting the appropriate video
+   */
+  static analyzeError(error) {
+    if (!error) return 'error';
+    
+    // Check if it's a StremThru API error
+    if (error.data && error.data.error) {
+      const apiError = error.data.error;
+      
+      // Check for authentication errors
+      if (apiError.code === 'FORBIDDEN') {
+        // Check for two-factor authentication
+        if (apiError.message && (
+            apiError.message.includes('new location') || 
+            apiError.message.includes('new device') || 
+            apiError.message.includes('email has been sent')
+          )) {
+          return 'two_factor_auth';
+        }
+        
+        // Check for expired API key
+        if (apiError.message && (
+            apiError.message.includes('expired') || 
+            apiError.message.includes('invalid token')
+          )) {
+          return 'expired_api_key';
+        }
+        
+        // Default for other forbidden errors
+        return 'access_denied';
+      }
+      
+      // Check for premium account required
+      if (apiError.code === 'PAYMENT_REQUIRED' || 
+          (apiError.message && apiError.message.includes('premium'))) {
+        return 'not_premium';
+      }
+      
+      // Check for invalid API key
+      if (apiError.code === 'UNAUTHORIZED' || 
+          apiError.code === 'INVALID_CREDENTIALS' ||
+          (apiError.message && apiError.message.includes('invalid key'))) {
+        return 'access_denied';
+      }
+    }
+    
+    // Check the error message for specific patterns
+    const errorMsg = error.message || '';
+    
+    if (errorMsg.includes('premium') || errorMsg.includes('subscription')) {
+      return 'not_premium';
+    }
+    
+    if (errorMsg.includes('expired') || errorMsg.includes('invalid token')) {
+      return 'expired_api_key';
+    }
+    
+    if (errorMsg.includes('email has been sent') || 
+        errorMsg.includes('verification') || 
+        errorMsg.includes('two factor') || 
+        errorMsg.includes('2FA')) {
+      return 'two_factor_auth';
+    }
+    
+    if (errorMsg.includes('invalid key') || 
+        errorMsg.includes('unauthorized') || 
+        errorMsg.includes('access denied')) {
+      return 'access_denied';
+    }
+    
+    // Default to not_ready for other errors
+    return 'not_ready';
   }
 }
