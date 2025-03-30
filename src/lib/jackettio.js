@@ -93,7 +93,7 @@ async function getMetaInfos(type, stremioId, language){
   }else if(type == 'series'){
     return meta.getEpisodeById(id, season, episode, language);
   }else{
-    throw new Error(`Unsuported type ${type}`);
+    throw new Error(`Unsupported type ${type}`);
   }
 }
 
@@ -335,7 +335,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
           uncachedTorrents.forEach(torrent => {
             if(torrent.infos.private){
               torrent.disabled = true;
-              torrent.infoText = 'Uncached torrent require a passkey configuration';
+              torrent.infoText = 'Uncached torrent requires a passkey configuration';
             }
           });
         }
@@ -441,6 +441,11 @@ async function prepareNextEpisode(userConfig, metaInfos, debridInstance){
 }
 
 async function getDebridFiles(userConfig, infos, debridInstance){
+
+  // If the debridder is StremThru, use the new getFilesFromTorrent method
+  if (debridInstance.constructor.id === 'stremthru') {
+    return debridInstance.getFilesFromTorrent(infos);
+  }
 
   if(infos.magnetUrl){
 
@@ -690,10 +695,70 @@ export async function getDownload(userConfig, type, stremioId, torrentId){
     console.log(`${stremioId} : ${debridInstance.shortName} : ${infos.infoHash} : get files ...`);
     
     // We have already updated the status at the beginning of the function
-    files = await getDebridFiles(userConfig, infos, debridInstance);
+    const filesResult = await getDebridFiles(userConfig, infos, debridInstance);
+    
+    // For StremThru, filesResult can be an object with files and errorType
+    if (filesResult && typeof filesResult === 'object' && 'files' in filesResult) {
+      files = filesResult.files;
+      
+      // If an error type is present and there are no files, return the appropriate error video
+      if (filesResult.errorType && (!files || files.length === 0)) {
+        console.log(`${stremioId} : Error detected: ${filesResult.errorType}`);
+        return {
+          url: `/videos/${filesResult.errorType}.mp4`,
+          notReady: true,
+          errorType: filesResult.errorType,
+          reason: 'Error from StremThru'
+        };
+      }
+    } else {
+      // For other debridders, filesResult is directly an array of files
+      files = filesResult;
+    }
+    
     console.log(`${stremioId} : ${debridInstance.shortName} : ${infos.infoHash} : ${files.length} files found`);
 
-    download = await debridInstance.getDownload(getFile(files, type, season, episode));
+    // If no files are available, return the not_ready.mp4 video
+    if (!files || files.length === 0) {
+      console.log(`${stremioId} : No files available, redirect to not_ready.mp4`);
+      return {
+        url: `/videos/not_ready.mp4`,
+        notReady: true,
+        errorType: 'not_ready',
+        reason: 'No files available'
+      };
+    }
+
+    const selectedFile = getFile(files, type, season, episode);
+    
+    // If no matching file is found, return the not_ready.mp4 video
+    if (!selectedFile) {
+      console.log(`${stremioId} : No matching file found, redirect to not_ready.mp4`);
+      return {
+        url: `/videos/not_ready.mp4`,
+        notReady: true,
+        errorType: 'not_ready',
+        reason: 'No matching file found'
+      };
+    }
+
+    download = await debridInstance.getDownload(selectedFile);
+
+    // Check if the download object contains the notReady property (specific to StremThru)
+    if (download && download.notReady) {
+      console.log(`${stremioId} : File not ready: ${download.reason || 'Unknown reason'}`);
+      
+      // Use the error type provided by StremThru or default to 'not_ready'
+      const errorType = download.errorType || 'not_ready';
+      
+      // Redirect to the appropriate error video
+      return {
+        url: `/videos/${errorType}.mp4`,
+        notReady: true,
+        errorType,
+        reason: download.reason || 'Unknown reason'
+      };
+    }
 
     if(download){
       download = applyMediaflowProxyIfNeeded(download, userConfig);
@@ -704,7 +769,10 @@ export async function getDownload(userConfig, type, stremioId, torrentId){
     // If no download is available, redirect to the not_ready.mp4 video
     console.log(`${stremioId} : No download available, redirect to not_ready.mp4`);
     return {
-      url: `${publicUrl}/static/videos/not_ready.mp4`
+      url: `/videos/not_ready.mp4`,
+      notReady: true,
+      errorType: 'not_ready',
+      reason: 'No download available'
     };
 
   }finally{
