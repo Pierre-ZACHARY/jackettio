@@ -32,9 +32,9 @@ const extractMediaInfo = (name) => {
   
   // Video codecs (search once)
   if (/[Hh][Ee][Vv][Cc]|[Xx]265|[Hh]\.?265/.test(name)) {
-    codecInfo = 'HEVC';
+    codecInfo = 'H265';
   } else if (/[Aa][Vv][Cc]|[Xx]264|[Hh]\.?264/.test(name)) {
-    codecInfo = 'AVC';
+    codecInfo = 'H264';
   } else if (/[Aa][Vv]1/.test(name)) {
     codecInfo = 'AV1';
   }
@@ -48,6 +48,8 @@ const extractMediaInfo = (name) => {
     sourceInfo = 'WEB-DL';
   } else if (/[Ww][Ee][Bb][Rr][Ii][Pp]/.test(name)) {
     sourceInfo = 'WEBRIP';
+  } else if (/\b[Ww][Ee][Bb]\b/.test(name)) {
+    sourceInfo = 'WEB';
   } else if (/[Hh][Dd][Tt][Vv]/.test(name)) {
     sourceInfo = 'HDTV';
   } else if (/[Dd][Vv][Dd][Rr][Ii][Pp]/.test(name)) {
@@ -118,9 +120,16 @@ function priotizeItems(allItems, priotizeItems, max){
 }
 
 function searchEpisodeFile(files, season, episode){
+  // Traditional formats for TV series
   return files.find(file => file.name.includes(`S${numberPad(season, 2)}E${numberPad(episode, 3)}`))
     || files.find(file => file.name.includes(`S${numberPad(season, 2)}E${numberPad(episode, 2)}`))
     || files.find(file => file.name.includes(`${season}${numberPad(episode, 2)}`))
+    // Specific formats for anime
+    || files.find(file => new RegExp(`\\bE(pisode)?\\s*${numberPad(episode, 2)}\\b`, 'i').test(file.name))
+    || files.find(file => new RegExp(`\\bEP\\s*${numberPad(episode, 2)}\\b`, 'i').test(file.name))
+    || files.find(file => new RegExp(`\\[\\s*${numberPad(episode, 2)}\\s*\\]`).test(file.name))
+    || files.find(file => new RegExp(`\\s-\\s*${numberPad(episode, 2)}\\b`).test(file.name))
+    // Simple format with just the episode number (use as last resort)
     || files.find(file => file.name.includes(`${numberPad(episode, 2)}`))
     || false;
 }
@@ -408,6 +417,16 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
 }
 
+function getFile(files, type, season, episode){
+  files = files.sort(sortBy('size', true));
+  if(type == 'movie'){
+    return files[0];
+  }else if(type == 'series'){
+    // Only return the file matching the episode, no fallback to the first file
+    return searchEpisodeFile(files, season, episode);
+  }
+}
+
 async function prepareNextEpisode(userConfig, metaInfos, debridInstance){
 
   try {
@@ -443,7 +462,7 @@ async function prepareNextEpisode(userConfig, metaInfos, debridInstance){
 async function getDebridFiles(userConfig, infos, debridInstance){
 
   // If the debridder is StremThru, use the new getFilesFromTorrent method
-  if (debridInstance.constructor.id === 'stremthru') {
+  if (debridInstance.constructor.id === 'stremthru' && typeof debridInstance.getFilesFromTorrent === 'function') {
     return debridInstance.getFilesFromTorrent(infos);
   }
 
@@ -480,15 +499,6 @@ async function getDebridFiles(userConfig, infos, debridInstance){
 
   }
 
-}
-
-function getFile(files, type, season, episode){
-  files = files.sort(sortBy('size', true));
-  if(type == 'movie'){
-    return files[0];
-  }else if(type == 'series'){
-    return searchEpisodeFile(files, season, episode) || files[0];
-  }
 }
 
 function formatLanguages(languages, torrentName = '') {
@@ -549,8 +559,7 @@ export async function getStreams(userConfig, type, stremioId, publicUrl){
     try {
       const stored = window.localStorage.getItem('jackettio_clicked_torrents');
       if (stored) {
-        const parsed = JSON.parse(stored);
-        Object.assign(clickedHashes, parsed);
+        Object.assign(clickedHashes, JSON.parse(stored));
       }
     } catch (err) {
       console.error('Error when retrieving clicked torrents:', err);
@@ -628,6 +637,9 @@ export async function getStreams(userConfig, type, stremioId, publicUrl){
     } else if (torrent.isCached) {
       // Default behavior for cached torrents from other services
       statusIcon = '+';
+    } else {
+      // For non-cached torrents, use the down arrow
+      statusIcon = '⬇️';
     }
     
     return {
