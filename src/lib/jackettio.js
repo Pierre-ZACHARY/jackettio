@@ -205,12 +205,12 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
     if(userIndexers.length){
       indexers = userIndexers;
     }else if(availableIndexers.length){
-      console.log(`${stremioId} : User-defined indexers "${userConfig.indexers.join(', ')}" not available, falling back to all "${type}" indexers`);
+      console.log(`${stremioId} : User defined indexers "${userConfig.indexers.join(', ')}" not available, fallback to all "${type}" indexers`);
       indexers = availableIndexers;
     }else if(indexers.length){
-      console.log(`${stremioId} : User-defined indexers "${userConfig.indexers.join(', ')}" or "${type}" indexers not available, falling back to all indexers`);
+      console.log(`${stremioId} : User defined indexers "${userConfig.indexers.join(', ')}" or "${type}" indexers not available, fallback to all indexers`);
     }else{
-      throw new Error(`${stremioId} : No indexer configured in Jackett`);
+      throw new Error(`${stremioId} : No indexer configured in jackett`);
     }
 
     console.log(`${stremioId} : ${indexers.length} indexers selected : ${indexers.map(indexer => indexer.title).join(', ')}`);
@@ -231,7 +231,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
         searchPromises.push(...primaryPromises);
       } else {
         console.warn(`${stremioId} : Primary title (metaInfos.name) is missing, cannot search movies.`);
-        // If no primary title, we cannot search for movies
+        // If no primary title, we can't do anything for movies
         searchPromises = []; // Ensure the list is empty
       }
 
@@ -264,63 +264,47 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
     }else if(type == 'series'){
 
-      // Search for individual episodes
       const episodesPromises = indexers.map(indexer => timeoutIndexerSearch(indexer.id, jackett.searchEpisodeTorrents({...metaInfos, indexer: indexer.id}), indexerTimeoutSec*1000));
-      // Search for season/series packs
+      // const packsPromises = indexers.map(indexer => promiseTimeout(jackett.searchSeasonTorrents({...metaInfos, indexer: indexer.id}), indexerTimeoutSec*1000).catch(err => []));
       const packsPromises = indexers.map(indexer => timeoutIndexerSearch(indexer.id, jackett.searchSerieTorrents({...metaInfos, indexer: indexer.id}), indexerTimeoutSec*1000));
 
-      // Process episode results
-      const episodesTorrents = (await Promise.allSettled(episodesPromises))
-        .filter(result => result.status === 'fulfilled' && Array.isArray(result.value))
-        .flatMap(result => result.value)
-        .filter(filterSearch); // Apply basic filters
+      const episodesTorrents = [].concat(...(await Promise.all(episodesPromises))).filter(filterSearch);
+      // const packsTorrents = [].concat(...(await Promise.all(packsPromises))).filter(torrent => filterSearch(torrent) && parseWords(torrent.name.toUpperCase()).includes(`S${numberPad(season)}`));
+      const packsTorrents = [].concat(...(await Promise.all(packsPromises))).filter(torrent => {
+        if(!filterSearch(torrent))return false;
+        const words = parseWords(torrent.name.toLowerCase());
+        const wordsStr = words.join(' ');
+        if(
+          // Season x
+          wordsStr.includes(`season ${season}`)
+          // SXX
+          || words.includes(`s${numberPad(season, 2)}`)
+        ){
+          return true;
+        }
+        // From SXX to SXX
+        const range = wordsStr.match(/s([\d]{2,}) s([\d]{2,})/);
+        if(range && season >= parseInt(range[1]) && season <= parseInt(range[2])){
+          return true;
+        }
+        // Complete without season number (serie pack)
+        if(words.includes('complete') && !wordsStr.match(/ (s[\d]{2,}|season [\d]) /)){
+          return true;
+        }
+        return false;
+      });
 
-      // Process pack results and filter for the correct season/series
-      const packsTorrents = (await Promise.allSettled(packsPromises))
-        .filter(result => result.status === 'fulfilled' && Array.isArray(result.value))
-        .flatMap(result => result.value)
-        .filter(torrent => {
-          if(!filterSearch(torrent)) return false; // Apply base filters
-          const words = parseWords(torrent.name.toLowerCase());
-          const wordsStr = words.join(' ');
-          // Check for season and episode in the torrent name
-          if(
-            // Season x
-            wordsStr.includes(`season ${season}`)
-            // SXX format (e.g., S01)
-            || words.includes(`s${numberPad(season, 2)}`)
-          ){
-            return true;
-          }
-          // From SXX to SXX format (e.g., S01 S03)
-          const range = wordsStr.match(/s([\d]{2,}) s([\d]{2,})/);
-          if(range && season >= parseInt(range[1]) && season <= parseInt(range[2])){
-            return true;
-          }
-          // Complete series pack without explicit season number
-          if(words.includes('complete') && !wordsStr.match(/ (s[\d]{2,}|season [\d]) /)){
-            return true;
-          }
-          return false;
-        });
-
-      // Concatenate episode and pack torrents
       torrents = [].concat(episodesTorrents, packsTorrents);
 
-      console.log(`${stremioId} : ${torrents.length} torrents found (episodes + packs) in ${(new Date() - startDate) / 1000}s`);
+      console.log(`${stremioId} : ${torrents.length} torrents found in ${(new Date() - startDate) / 1000}s`);
 
-      // Apply year filter, search filters, and sort
       torrents = torrents.filter(filterYear);
       torrents = torrents.filter(filterSearch).sort(sortBy(...sortSearch));
-      // Prioritize languages
       torrents = priotizeItems(torrents, filterLanguage, Math.max(1, Math.round(maxTorrents * 0.33)));
-      // Keep slightly more initially
       torrents = torrents.slice(0, maxTorrents + 2);
 
-      // If pack torrents should be prioritized and none are in the top results, add the best ones
       if(priotizePackTorrents > 0 && packsTorrents.length && !torrents.find(t => packsTorrents.includes(t))){
         const bestPackTorrents = packsTorrents.slice(0, Math.min(packsTorrents.length, priotizePackTorrents));
-        // Replace the last N torrents with the best pack torrents
         torrents.splice(bestPackTorrents.length * -1, bestPackTorrents.length, ...bestPackTorrents);
       }
 
@@ -329,25 +313,20 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
     console.log(`${stremioId} : ${torrents.length} torrents filtered, get torrents infos ...`);
     startDate = new Date();
 
-    // Fetch detailed torrent infos (size, files, hash)
-    const limit = pLimit(5); // Limit concurrent requests to Jackett API
+    const limit = pLimit(5);
     torrents = await Promise.all(torrents.map(torrent => limit(async () => {
       try {
-        // Fail if fetching info takes too long
         torrent.infos = await promiseTimeout(torrentInfos.get(torrent), Math.min(30, indexerTimeoutSec)*1000);
         return torrent;
       }catch(err){
-        // Handle errors during info fetching
         console.log(`${stremioId} Failed getting torrent infos for ${torrent.id} from indexer ${torrent.indexerId}`);
         console.log(`${stremioId} ${torrent.link.replace(/apikey=[a-z0-9\-]+/, 'apikey=****')}`, err);
         return false;
       }
     })));
-    // Filter out torrents where info fetching failed and deduplicate by infoHash
-    torrents = torrents.filter(torrent => torrent && torrent.infos) 
-      .filter((torrent, index, items) => items.findIndex(t => t.infos.infoHash == torrent.infos.infoHash) === index) 
-      // Limit to the maximum number of torrents requested
-      .slice(0, maxTorrents); 
+    torrents = torrents.filter(torrent => torrent && torrent.infos)
+      .filter((torrent, index, items) => items.findIndex(t => t.infos.infoHash == torrent.infos.infoHash) === index)
+      .slice(0, maxTorrents);
 
     console.log(`${stremioId} : ${torrents.length} torrents infos found in ${(new Date() - startDate) / 1000}s`);
 
@@ -402,8 +381,10 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
         if(config.replacePasskey && !(userConfig.passkey && userConfig.passkey.match(new RegExp(config.replacePasskeyPattern)))){
           uncachedTorrents.forEach(torrent => {
-            torrent.disabled = true;
-            torrent.infoText = 'Uncached torrent requires a passkey configuration';
+            if(torrent.infos.private){
+              torrent.disabled = true;
+              torrent.infoText = 'Uncached torrent requires a passkey configuration';
+            }
           });
         }
 
