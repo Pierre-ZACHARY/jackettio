@@ -11,6 +11,12 @@ export default {
   tmdbAccessToken: process.env.TMDB_ACCESS_TOKEN || '', 
   // Data folder for cache database, torrent files ... Must be persistent in production
   dataFolder: process.env.DATA_FOLDER || '/tmp',
+  // Cache configuration
+  cacheType: process.env.CACHE_TYPE || 'sqlite', // 'sqlite' or 'redis'
+  redisHost: process.env.REDIS_HOST || 'localhost',
+  redisPort: parseInt(process.env.REDIS_PORT || 6379),
+  redisDb: parseInt(process.env.REDIS_DB || 0),
+  redisPassword: process.env.REDIS_PASSWORD || undefined,
   // Enable localtunnel feature
   localtunnel: (process.env.LOCALTUNNEL || 'false') === 'true',
   // Addon ID
