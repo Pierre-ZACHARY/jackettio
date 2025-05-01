@@ -206,7 +206,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
       console.log(`${stremioId} : User defined indexers "${userConfig.indexers.join(', ')}" not available, fallback to all "${type}" indexers`);
       indexers = availableIndexers;
     }else if(indexers.length){
-      console.log(`${stremioId} : User defined indexers "${userConfig.indexers.join(', ')}" or "${type}" indexers not available, fallback to all indexers`);
+      // console.log(`${stremioId} : User defined indexers "${userConfig.indexers.join(', ')}" or "${type}" indexers not available, fallback to all indexers`);
     }else{
       throw new Error(`${stremioId} : No indexer configured in jackett`);
     }
@@ -227,7 +227,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
         );
         searchPromises.push(...primaryPromises);
       } else {
-        console.warn(`${stremioId} : Primary title (metaInfos.name) is missing, cannot search movies.`);
+        // console.warn(`${stremioId} : Primary title (metaInfos.name) is missing, cannot search movies.`);
         // If no primary title, we can't do anything for movies
         searchPromises = []; // Ensure the list is empty
       }
@@ -240,7 +240,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
         .filter(result => result.status === 'fulfilled' && Array.isArray(result.value))
         .flatMap(result => result.value);
 
-      console.log(`${stremioId} : ${rawTorrents.length} raw torrents found from ${searchPromises.length} search queries in ${(new Date() - startDate) / 1000}s`);
+      // console.log(`${stremioId} : ${rawTorrents.length} raw torrents found from ${searchPromises.length} search queries in ${(new Date() - startDate) / 1000}s`);
 
       // Deduplicate torrents based on a unique identifier (e.g., guid or infoHash)
       const uniqueTorrentsMap = new Map();
@@ -251,24 +251,24 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
         }
       }
       torrents = Array.from(uniqueTorrentsMap.values());
-      console.log(`${stremioId} : ${torrents.length} unique torrents after deduplication. Details:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 10)); // Log first 10 for brevity
+      // console.log(`${stremioId} : ${torrents.length} unique torrents after deduplication. Details:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 10)); // Log first 10 for brevity
 
       const torrentsBeforeYearFilter = torrents.length;
       torrents = torrents.filter(filterYear);
-      console.log(`${stremioId} : ${torrents.length} torrents after filterYear (removed ${torrentsBeforeYearFilter - torrents.length}).`);
+      // console.log(`${stremioId} : ${torrents.length} torrents after filterYear (removed ${torrentsBeforeYearFilter - torrents.length}).`);
 
       const torrentsBeforeSearchFilter = torrents.length;
       torrents = torrents.filter(filterSearch);
-      console.log(`${stremioId} : ${torrents.length} torrents after filterSearch (removed ${torrentsBeforeSearchFilter - torrents.length}).`);
+      // console.log(`${stremioId} : ${torrents.length} torrents after filterSearch (removed ${torrentsBeforeSearchFilter - torrents.length}).`);
 
       torrents = torrents.sort(sortBy(...sortSearch));
-      console.log(`${stremioId} : ${torrents.length} torrents after initial sort. Top 5:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 5));
+      // console.log(`${stremioId} : ${torrents.length} torrents after initial sort. Top 5:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 5));
 
       torrents = priotizeItems(torrents, filterLanguage, Math.max(1, Math.round(maxTorrents * 0.33)));
-      console.log(`${stremioId} : ${torrents.length} torrents after priotizeItems. Top 5:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 5));
+      // console.log(`${stremioId} : ${torrents.length} torrents after priotizeItems. Top 5:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 5));
 
       torrents = torrents.slice(0, maxTorrents + 2);
-      console.log(`${stremioId} : ${torrents.length} torrents after slice(0, ${maxTorrents + 2}).`);
+      // console.log(`${stremioId} : ${torrents.length} torrents after slice(0, ${maxTorrents + 2}).`);
 
     }else if(type == 'series'){
 
@@ -304,7 +304,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
       torrents = [].concat(episodesTorrents, packsTorrents);
 
-      console.log(`${stremioId} : ${torrents.length} torrents found in ${(new Date() - startDate) / 1000}s`);
+      // console.log(`${stremioId} : ${torrents.length} torrents found in ${(new Date() - startDate) / 1000}s`);
 
       torrents = torrents.filter(filterYear);
       torrents = torrents.filter(filterSearch).sort(sortBy(...sortSearch));
@@ -318,7 +318,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
     }
 
-    console.log(`${stremioId} : ${torrents.length} torrents filtered, get torrents infos ...`);
+    // console.log(`${stremioId} : ${torrents.length} torrents filtered, get torrents infos ...`);
     startDate = new Date();
 
     const limit = pLimit(5);
@@ -336,7 +336,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
       .filter((torrent, index, items) => items.findIndex(t => t.infos.infoHash == torrent.infos.infoHash) === index)
       .slice(0, maxTorrents);
 
-    console.log(`${stremioId} : ${torrents.length} torrents infos found in ${(new Date() - startDate) / 1000}s`);
+    // console.log(`${stremioId} : ${torrents.length} torrents infos found in ${(new Date() - startDate) / 1000}s`);
 
     if(torrents.length == 0){
       throw new Error(`No torrent infos for type ${type} and id ${stremioId}`);
@@ -396,7 +396,7 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
           });
         }
 
-        console.log(`${stremioId} : ${cachedTorrents.length} cached torrents on ${debridInstance.shortName}`);
+        // console.log(`${stremioId} : ${cachedTorrents.length} cached torrents on ${debridInstance.shortName}`);
 
         // Custom function to sort torrents by quality in descending order of resolutions
         const sortByQuality = (torrents) => {
@@ -454,8 +454,8 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
     }
 
-    console.log(`${stremioId} : ${torrents.length} torrents after fetching infos, final deduplication and slice. Top 5:`, torrents.map(t => ({ name: t.name, infoHash: t.infos?.infoHash, size: t.infos?.size, seeders: t.seeders })).slice(0, 5));
-    console.log(`${stremioId} : ${torrents.length} torrents infos found in ${(new Date() - startDate) / 1000}s`);
+    // console.log(`${stremioId} : ${torrents.length} torrents after fetching infos, final deduplication and slice. Top 5:`, torrents.map(t => ({ name: t.name, infoHash: t.infos?.infoHash, size: t.infos?.size, seeders: t.seeders })).slice(0, 5));
+    // console.log(`${stremioId} : ${torrents.length} torrents infos found in ${(new Date() - startDate) / 1000}s`);
 
     if(torrents.length == 0){
       throw new Error(`No torrent infos for type ${type} and id ${stremioId}`);
