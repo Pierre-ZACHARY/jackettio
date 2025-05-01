@@ -174,8 +174,6 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
     let torrents = [];
     let startDate = new Date();
 
-    console.log(`${stremioId} : Searching torrents ...`);
-
     const sortSearch = [['seeders', true]];
     const filterSearch = (torrent) => {
       if(!qualities.includes(torrent.quality))return false;
@@ -224,7 +222,6 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
       // Promises for the primary title
       if (primaryTitle) {
-        console.log(`${stremioId} : Searching with primary title: ${primaryTitle}`);
         const primaryPromises = indexers.map(indexer => 
           timeoutIndexerSearch(indexer.id, jackett.searchMovieTorrents({...metaInfos, name: primaryTitle, indexer: indexer.id}), indexerTimeoutSec*1000)
         );
@@ -254,13 +251,24 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
         }
       }
       torrents = Array.from(uniqueTorrentsMap.values());
-      console.log(`${stremioId} : ${torrents.length} unique torrents after deduplication.`);
+      console.log(`${stremioId} : ${torrents.length} unique torrents after deduplication. Details:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 10)); // Log first 10 for brevity
 
+      const torrentsBeforeYearFilter = torrents.length;
       torrents = torrents.filter(filterYear);
+      console.log(`${stremioId} : ${torrents.length} torrents after filterYear (removed ${torrentsBeforeYearFilter - torrents.length}).`);
+
+      const torrentsBeforeSearchFilter = torrents.length;
       torrents = torrents.filter(filterSearch);
+      console.log(`${stremioId} : ${torrents.length} torrents after filterSearch (removed ${torrentsBeforeSearchFilter - torrents.length}).`);
+
       torrents = torrents.sort(sortBy(...sortSearch));
+      console.log(`${stremioId} : ${torrents.length} torrents after initial sort. Top 5:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 5));
+
       torrents = priotizeItems(torrents, filterLanguage, Math.max(1, Math.round(maxTorrents * 0.33)));
+      console.log(`${stremioId} : ${torrents.length} torrents after priotizeItems. Top 5:`, torrents.map(t => ({ name: t.name, year: t.year, size: t.size, seeders: t.seeders })).slice(0, 5));
+
       torrents = torrents.slice(0, maxTorrents + 2);
+      console.log(`${stremioId} : ${torrents.length} torrents after slice(0, ${maxTorrents + 2}).`);
 
     }else if(type == 'series'){
 
@@ -444,6 +452,13 @@ async function getTorrents(userConfig, metaInfos, debridInstance){
 
       }
 
+    }
+
+    console.log(`${stremioId} : ${torrents.length} torrents after fetching infos, final deduplication and slice. Top 5:`, torrents.map(t => ({ name: t.name, infoHash: t.infos?.infoHash, size: t.infos?.size, seeders: t.seeders })).slice(0, 5));
+    console.log(`${stremioId} : ${torrents.length} torrents infos found in ${(new Date() - startDate) / 1000}s`);
+
+    if(torrents.length == 0){
+      throw new Error(`No torrent infos for type ${type} and id ${stremioId}`);
     }
 
     return torrents;
