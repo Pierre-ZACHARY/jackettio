@@ -131,7 +131,8 @@ function normalizeItems(items){
     }, {});
     const quality = item.title.match(/(2160|1080|720|480|360)p/);
     const title = parseWords(item.title).join(' ');
-    const year = item.title.replace(quality ? quality[1] : '', '').match(/(19|20[\d]{2})/);
+    // Correction de la regex pour capturer 19xx ou 20xx
+    const year = item.title.replace(quality ? quality[1] : '', '').match(/(19\d{2}|20\d{2})/);
     return {
       name: item.title,
       guid: item.guid,
@@ -145,7 +146,8 @@ function normalizeItems(items){
       magneturl: attr.magneturl || '', 
       type: item.type,
       quality: quality ? parseInt(quality[1]) : 0,
-      year: year ? parseInt(year.pop()) : 0,
+      // Correction pour utiliser le premier élément du match (l'année complète)
+      year: year ? parseInt(year[0]) : 0,
       languages: config.languages.filter(lang => title.match(lang.pattern))
     };
   });
