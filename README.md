@@ -116,4 +116,4 @@ Jackettio is designed for selfhosted, whether for personal or public use. As a s
 - **Addon ID** `ADDON_ID` Change the `id` field in stremio manifest
 - **Default user settings:** `DEFAULT_*` All default settings available for user configuration on the /configure page are fully customizable
 - **Immulatable user settings:** `IMMULATABLE_USER_CONFIG_KEYS` List of user settings that will no longer be accessible for modification or viewing on the /configure page. Example: `maxTorrents,priotizePackTorrents`
-- And mores ..., see all configurations in [config.js file](https://github.com/arvida42/jackettio/blob/master/src/lib/config.js).
+- And mores ..., see all configurations in [config.js file](https://github.com/Telkaoss/jackettio/blob/master/src/lib/config.js).
