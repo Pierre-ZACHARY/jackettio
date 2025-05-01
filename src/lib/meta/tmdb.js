@@ -12,7 +12,7 @@ export default class Tmdb {
     const meta = searchId.movie_results[0];
 
     return {
-      name: language ? meta.title || meta.original_title : meta.original_title || meta.title,
+      name: language ? meta.title || meta.original_title : meta.title || meta.original_title,
       year: parseInt(`${meta.release_date}`.split('-').shift()),
       imdb_id: id,
       type: 'movie',
@@ -39,7 +39,7 @@ export default class Tmdb {
     });
 
     return {
-      name: language ? meta.name || meta.original_name : meta.original_name || meta.name,
+      name: language ? meta.name || meta.original_name : meta.name || meta.original_name,
       year: parseInt(`${meta.first_air_date}`.split('-').shift()),
       imdb_id: id,
       type: 'series',
