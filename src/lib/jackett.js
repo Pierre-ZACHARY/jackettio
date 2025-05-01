@@ -132,7 +132,7 @@ function normalizeItems(items){
     const quality = item.title.match(/(2160|1080|720|480|360)p/);
     const title = parseWords(item.title).join(' ');
     // Correction de la regex pour capturer 19xx ou 20xx
-    const year = item.title.replace(quality ? quality[1] : '', '').match(/(19\d{2}|20\d{2})/);
+    const year = item.title.replace(quality ? quality[1] : '', '').match(/\b(19\d{2}|20\d{2})\b/);
     return {
       name: item.title,
       guid: item.guid,
