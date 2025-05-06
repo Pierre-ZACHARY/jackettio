@@ -456,8 +456,8 @@ export default class StremThru {
     });
 
     // Options for retries in case of error
-    const maxRetries = 2;
-    const retryDelay = 1000; // 1 second
+    const maxRetries = 0; // Aucune tentative de reconnexion
+    const retryDelay = 1000; 
     let retryCount = 0;
     let lastError = null;
 
@@ -473,36 +473,17 @@ export default class StremThru {
         if (data.error) {
           const error = new Error(`StremThru API error: ${JSON.stringify(data.error)}`);
           error.data = { error: data.error };
-          
-          // If it's an authentication error or INTERNAL_SERVER_ERROR, we can retry
-          if ((data.error.code === 'FORBIDDEN' || data.error.code === 'INTERNAL_SERVER_ERROR') && retryCount < maxRetries) {
-            lastError = error;
-            retryCount++;
-            console.log(`StremThru API retry (${retryCount}/${maxRetries}) after error: ${data.error.code}`);
-            await wait(retryDelay);
-            continue;
-          }
-          
           throw error;
         }
 
         return data;
       } catch (err) {
-        // If it's already a formatted error from us, throw it directly
+        // Toutes les erreurs sont directement propagées
         if (err.data && err.data.error) {
-          // If we haven't reached the maximum number of retries, retry
-          if (retryCount < maxRetries) {
-            lastError = err;
-            retryCount++;
-            console.log(`StremThru request retry (${retryCount}/${maxRetries}) after error: ${err.message}`);
-            await wait(retryDelay);
-            continue;
-          }
-          
           throw err;
         }
         
-        // Otherwise, format it
+        // Formater les erreurs non formatées
         console.error(`StremThru request error: ${err.message}`);
         const formattedError = new Error(`StremThru request error: ${err.message}`);
         formattedError.originalError = err;
@@ -510,7 +491,7 @@ export default class StremThru {
       }
     }
 
-    // If we get here, all retries have failed
+    // Si on arrive ici, toutes les tentatives ont échoué
     if (lastError) {
       console.error(`StremThru request failed after ${maxRetries} retries: ${lastError.message}`);
       throw lastError;
