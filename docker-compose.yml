@@ -3,7 +3,7 @@ name: jackettio
 services:
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: 21hsmw/flaresolverr:nodriver
     container_name: flaresolverr
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -29,7 +29,7 @@ services:
       - jackett-downloads:/downloads
 
   jackettio:
-    image: arvida42/jackettio:latest
+    image: ghcr.io/pierre-zachary/jackettio:master
     container_name: jackettio
     env_file:
       - .env.production
