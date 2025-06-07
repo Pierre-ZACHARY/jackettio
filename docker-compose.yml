@@ -27,6 +27,45 @@ services:
     volumes:
       - jackett-config:/config
       - jackett-downloads:/downloads
+  
+  comet:
+    container_name: comet
+    image: g0ldyy/comet
+    restart: unless-stopped
+    # ports:
+    #  - "8000:8000"
+    env_file:
+      - .commet-env
+    volumes:
+      - comet_data:/data
+  warp:
+    image: caomingjun/warp
+    container_name: warp
+    restart: always
+    # add removed rule back (https://github.com/opencontainers/runc/pull/3468)
+    device_cgroup_rules:
+      - 'c 10:200 rwm'
+    # ports:
+    #  - "1080:1080"
+    environment:
+      - WARP_SLEEP=2
+      # - WARP_LICENSE_KEY= # optional
+      # - WARP_ENABLE_NAT=1 # enable nat
+    cap_add:
+      # Docker already have them, these are for podman users
+      - MKNOD
+      - AUDIT_WRITE
+      # additional required cap for warp, both for podman and docker
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+      # uncomment for nat
+      # - net.ipv4.ip_forward=1
+      # - net.ipv6.conf.all.forwarding=1
+      # - net.ipv6.conf.all.accept_ra=2
+    volumes:
+      - ./data:/var/lib/cloudflare-warp
 
   jackettio:
     image: ghcr.io/pierre-zachary/jackettio:master
@@ -36,6 +75,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATA_FOLDER=/data
+      - JACKETT_URL=http://jackett:9117
     depends_on:
       - jackett
     networks:
