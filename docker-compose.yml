@@ -62,6 +62,9 @@ services:
       - STREMTHRU_URL=https://stremthru.13377001.xyz 
     volumes:
       - comet_data:/data
+    depends_on:
+      - jackett
+      - warp
   warp:
     image: caomingjun/warp
     container_name: warp
