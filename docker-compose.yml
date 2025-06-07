@@ -34,8 +34,32 @@ services:
     restart: unless-stopped
     # ports:
     #  - "8000:8000"
-    env_file:
-      - .commet-env
+    environment:
+      - METADATA_CACHE_TTL=2592000  # 30 days
+      - TORRENT_CACHE_TTL=1296000  # 15 days
+      - DEBRID_CACHE_TTL=86400  # 1 day
+      - SCRAPE_LOCK_TTL=300  # 5 minutes - Duration for distributed scraping locks
+      - SCRAPE_WAIT_TIMEOUT=30  # 30 seconds - Max time to wait for other instance to complete scraping
+      - DATABASE_TYPE=sqlite # Options: sqlite, postgresql
+      - DATABASE_URL=comet:comet@comet-db:port # For PostgreSQL
+      - DATABASE_PATH=data/comet.db # Only relevant for SQLite
+      - FASTAPI_HOST=0.0.0.0
+      - FASTAPI_PORT=8000
+      - FASTAPI_WORKERS=1 # set to -1 for auto-scaling (min((os.cpu_count() or 1) * 2 + 1, 12))
+      - USE_GUNICORN=True # Will use uvicorn if False or if on Windows
+      - ADDON_ID=stremio.comet.fast
+      - ADDON_NAME=Comet
+      - DEBRID_PROXY_URL=http://warp:1080 # Bypass Debrid Services and Torrentio IP blacklist
+      - INDEXER_MANAGER_TYPE=jackett
+      - INDEXER_MANAGER_URL=http://jackett:9117
+      - INDEXER_MANAGER_TIMEOUT=60  # Max time to get search results (seconds)
+      - INDEXER_MANAGER_INDEXERS='["YggTorrent", "Nyaa.si"]' # Jackett/Prowlarr indexers
+      - GET_TORRENT_TIMEOUT=5 # Max time to obtain torrent info hash (seconds)
+      - DOWNLOAD_TORRENT_FILES=True # Enable torrent file retrieval (instead of magnet link only)
+      - PROXY_DEBRID_STREAM=True
+      - PROXY_DEBRID_STREAM_MAX_CONNECTIONS=5
+      - PROXY_DEBRID_STREAM_DEBRID_DEFAULT_SERVICE=realdebrid
+      - STREMTHRU_URL=https://stremthru.13377001.xyz 
     volumes:
       - comet_data:/data
   warp:
