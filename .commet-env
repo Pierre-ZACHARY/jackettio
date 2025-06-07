@@ -65,16 +65,16 @@ DOWNLOAD_TORRENT_FILES=True # Enable torrent file retrieval (instead of magnet l
 # ============================== #
 # Scraping Configuration         #
 # ============================== #
-SCRAPE_COMET=false
+SCRAPE_COMET=true
 COMET_URL=https://comet.elfhosted.com
 
-SCRAPE_ZILEAN=false
+SCRAPE_ZILEAN=true
 ZILEAN_URL=https://zilean.elfhosted.com
 
-SCRAPE_TORRENTIO=false
+SCRAPE_TORRENTIO=true
 TORRENTIO_URL=https://torrentio.strem.fun
 
-SCRAPE_MEDIAFUSION=false
+SCRAPE_MEDIAFUSION=true
 MEDIAFUSION_URL=https://mediafusion.elfhosted.com
 
 # ============================== #
