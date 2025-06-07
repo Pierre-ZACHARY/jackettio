@@ -54,7 +54,7 @@ INDEXER_MANAGER_TYPE=jackett
 INDEXER_MANAGER_URL=http://jackett:9117
 # INDEXER_MANAGER_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 INDEXER_MANAGER_TIMEOUT=60  # Max time to get search results (seconds)
-INDEXER_MANAGER_INDEXERS='["YggTorrent", "Nyaa.si]' # Jackett/Prowlarr indexers
+INDEXER_MANAGER_INDEXERS='["YggTorrent", "Nyaa.si"]' # Jackett/Prowlarr indexers
 
 # ============================== #
 # Torrent Settings               #

@@ -65,13 +65,11 @@ services:
       # - net.ipv6.conf.all.forwarding=1
       # - net.ipv6.conf.all.accept_ra=2
     volumes:
-      - ./data:/var/lib/cloudflare-warp
+      - warp_data:/var/lib/cloudflare-warp
 
   jackettio:
     image: ghcr.io/pierre-zachary/jackettio:master
     container_name: jackettio
-    env_file:
-      - .env.production
     environment:
       - NODE_ENV=production
       - DATA_FOLDER=/data
@@ -91,3 +89,5 @@ volumes:
   jackett-config:
   jackett-downloads:
   jackettio-data:
+  comet_data:
+  warp_data:
