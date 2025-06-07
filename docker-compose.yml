@@ -53,7 +53,7 @@ services:
       - INDEXER_MANAGER_TYPE=jackett
       - INDEXER_MANAGER_URL=http://jackett:9117
       - INDEXER_MANAGER_TIMEOUT=60  # Max time to get search results (seconds)
-      - INDEXER_MANAGER_INDEXERS='["YggTorrent", "Nyaa.si"]' # Jackett/Prowlarr indexers
+      - INDEXER_MANAGER_INDEXERS=["YggTorrent", "Nyaa.si"] # Jackett/Prowlarr indexers
       - GET_TORRENT_TIMEOUT=5 # Max time to obtain torrent info hash (seconds)
       - DOWNLOAD_TORRENT_FILES=True # Enable torrent file retrieval (instead of magnet link only)
       - PROXY_DEBRID_STREAM=True
